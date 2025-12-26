@@ -41,6 +41,7 @@ class DatabaseSeeder extends Seeder
             MaterialSeeder::class,
             PrinterSeeder::class,
             PricingRuleSeeder::class,
+            DemoModelsSeeder::class,
         ]);
 
         $this->command->info('Database seeded successfully!');
