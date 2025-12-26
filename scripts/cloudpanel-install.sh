@@ -63,16 +63,17 @@ ensure_packages() {
     log "Using distro PHP packages for ${OS_CODENAME}; skipping external repo"
     if [[ ${sury_repo_exists} -eq 1 ]]; then
       local removed_any=0
-      if [[ -f "${sury_list}" ]]; then
-        ${SUDO} rm -f "${sury_list}"
-        removed_any=1
-      fi
-      if [[ -f "${sury_key}" ]]; then
-        ${SUDO} rm -f "${sury_key}"
-        removed_any=1
-      fi
+      local removed_files=()
+      local sury_paths=("${sury_list}" "${sury_key}")
+      for path in "${sury_paths[@]}"; do
+        if [[ -f "${path}" ]]; then
+          ${SUDO} rm -f "${path}"
+          removed_any=1
+          removed_files+=("${path}")
+        fi
+      done
       if [[ ${removed_any} -eq 1 ]]; then
-        log "Ensured sury PHP apt entries are removed (${sury_list} ${sury_key})"
+        log "Removed existing sury PHP repository configuration (${removed_files[*]})"
       fi
     fi
   elif [[ ${sury_repo_exists} -eq 0 ]]; then
