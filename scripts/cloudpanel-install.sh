@@ -42,18 +42,18 @@ ensure_packages() {
 
   . /etc/os-release
   OS_CODENAME="${VERSION_CODENAME:-$(lsb_release -cs)}"
-  local has_sury_repo=0
+  local sury_repo_exists=0
   if grep -q "packages.sury.org/php" /etc/apt/sources.list /etc/apt/sources.list.d/* 2>/dev/null; then
-    has_sury_repo=1
+    sury_repo_exists=1
   fi
 
   if [[ "${OS_CODENAME}" == "noble" ]]; then
     log "Using distro PHP packages for ${OS_CODENAME}; skipping external repo"
-    if [[ ${has_sury_repo} -eq 1 ]]; then
-      ${SUDO} rm -f /etc/apt/sources.list.d/sury-php.list /etc/apt/trusted.gpg.d/sury-php.gpg
+    if [[ ${sury_repo_exists} -eq 1 ]]; then
+      ${SUDO} rm -f /etc/apt/sources.list.d/*sury*php*.list /etc/apt/trusted.gpg.d/sury-php.gpg
       log "Ensured sury PHP apt entries are removed"
     fi
-  elif [[ ${has_sury_repo} -eq 0 ]]; then
+  elif [[ ${sury_repo_exists} -eq 0 ]]; then
     log "Adding PHP repository"
     ${SUDO} curl -fsSL https://packages.sury.org/php/apt.gpg | ${SUDO} gpg --dearmor -o /etc/apt/trusted.gpg.d/sury-php.gpg
     echo "deb https://packages.sury.org/php/ ${OS_CODENAME:-jammy} main" | ${SUDO} tee /etc/apt/sources.list.d/sury-php.list >/dev/null
