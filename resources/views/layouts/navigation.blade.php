@@ -5,16 +5,24 @@
             <div class="flex">
                 <!-- Logo -->
                 <div class="shrink-0 flex items-center">
-                    <a href="{{ route('dashboard') }}">
-                        <x-application-logo class="block h-9 w-auto fill-current text-gray-800" />
+                    <a href="{{ route('models.index') }}" class="text-xl font-bold text-blue-600">
+                        Modela.gr
                     </a>
                 </div>
 
                 <!-- Navigation Links -->
                 <div class="hidden space-x-8 sm:-my-px sm:ms-10 sm:flex">
-                    <x-nav-link :href="route('dashboard')" :active="request()->routeIs('dashboard')">
-                        {{ __('Dashboard') }}
+                    <x-nav-link :href="route('models.index')" :active="request()->routeIs('models.*')">
+                        {{ __('Browse Models') }}
                     </x-nav-link>
+                    @auth
+                        <x-nav-link :href="route('models.my')" :active="request()->routeIs('models.my')">
+                            {{ __('My Models') }}
+                        </x-nav-link>
+                        <x-nav-link :href="route('quotes.index')" :active="request()->routeIs('quotes.*')">
+                            {{ __('My Quotes') }}
+                        </x-nav-link>
+                    @endauth
                 </div>
             </div>
 
