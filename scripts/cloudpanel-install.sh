@@ -16,6 +16,8 @@ DB_NAME="${DB_NAME:-modela}"
 DB_USER="${DB_USER:-modela}"
 DB_PASS="${DB_PASS:-$(openssl rand -hex 18)}"
 PHP_VERSION="${PHP_VERSION:-8.3}"
+MYSQL_ROOT_USER="${MYSQL_ROOT_USER:-root}"
+MYSQL_ROOT_PASS="${MYSQL_ROOT_PASS:-}"
 
 if [[ "${EUID}" -ne 0 ]]; then
   SUDO="sudo"
@@ -38,7 +40,8 @@ ensure_packages() {
     log "Adding PHP repository"
     ${SUDO} curl -fsSL https://packages.sury.org/php/apt.gpg | ${SUDO} gpg --dearmor -o /etc/apt/trusted.gpg.d/sury-php.gpg
     . /etc/os-release
-    echo "deb https://packages.sury.org/php/ ${VERSION_CODENAME:-jammy} main" | ${SUDO} tee /etc/apt/sources.list.d/sury-php.list >/dev/null
+    OS_CODENAME="${VERSION_CODENAME:-$(lsb_release -cs)}"
+    echo "deb https://packages.sury.org/php/ ${OS_CODENAME:-jammy} main" | ${SUDO} tee /etc/apt/sources.list.d/sury-php.list >/dev/null
   fi
 
   log "Installing PHP ${PHP_VERSION}, MySQL, Redis, and build tools"
@@ -50,13 +53,20 @@ ensure_packages() {
 
   if ! command -v composer >/dev/null 2>&1; then
     log "Installing Composer"
-    curl -sS https://getcomposer.org/installer | php
-    ${SUDO} mv composer.phar /usr/local/bin/composer
+    EXPECTED_SIGNATURE="$(curl -fsSL https://composer.github.io/installer.sig)"
+    php -r "copy('https://getcomposer.org/installer', 'composer-setup.php');"
+    php -r "if (hash_file('SHA384', 'composer-setup.php') === '${EXPECTED_SIGNATURE}') { echo 'Installer verified'; } else { echo 'Installer corrupt'; unlink('composer-setup.php'); exit(1); }"
+    php composer-setup.php --install-dir=/usr/local/bin --filename=composer
+    rm composer-setup.php
   fi
 
   if ! command -v node >/dev/null 2>&1 || ! node -v | grep -q "v20"; then
-    log "Installing Node.js 20"
-    curl -fsSL https://deb.nodesource.com/setup_20.x | ${SUDO} -E bash -
+    log "Installing Node.js 20 (verified apt repo)"
+    . /etc/os-release
+    OS_CODENAME="${VERSION_CODENAME:-$(lsb_release -cs)}"
+    curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key | ${SUDO} gpg --dearmor -o /usr/share/keyrings/nodesource.gpg
+    echo "deb [signed-by=/usr/share/keyrings/nodesource.gpg] https://deb.nodesource.com/node_20.x ${OS_CODENAME} main" | ${SUDO} tee /etc/apt/sources.list.d/nodesource.list >/dev/null
+    ${SUDO} apt-get update -y
     ${SUDO} apt-get install -y nodejs
   fi
 }
@@ -64,9 +74,13 @@ ensure_packages() {
 configure_database() {
   log "Provisioning MySQL database"
   ${SUDO} systemctl enable --now mysql
-  ${SUDO} mysql -uroot -e "CREATE DATABASE IF NOT EXISTS \`${DB_NAME}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
-  ${SUDO} mysql -uroot -e "CREATE USER IF NOT EXISTS '${DB_USER}'@'localhost' IDENTIFIED BY '${DB_PASS}';"
-  ${SUDO} mysql -uroot -e "GRANT ALL PRIVILEGES ON \`${DB_NAME}\`.* TO '${DB_USER}'@'localhost'; FLUSH PRIVILEGES;"
+  local mysql_flags="-u${MYSQL_ROOT_USER}"
+  if [[ -n "${MYSQL_ROOT_PASS}" ]]; then
+    mysql_flags="${mysql_flags} -p${MYSQL_ROOT_PASS}"
+  fi
+  ${SUDO} mysql ${mysql_flags} -e "CREATE DATABASE IF NOT EXISTS \`${DB_NAME}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+  ${SUDO} mysql ${mysql_flags} -e "CREATE USER IF NOT EXISTS '${DB_USER}'@'localhost' IDENTIFIED BY '${DB_PASS}';"
+  ${SUDO} mysql ${mysql_flags} -e "GRANT ALL PRIVILEGES ON \`${DB_NAME}\`.* TO '${DB_USER}'@'localhost'; FLUSH PRIVILEGES;"
 }
 
 clone_repository() {
@@ -147,7 +161,7 @@ configure_nginx() {
   fi
 
   log "Configuring Nginx (standalone)"
-  local nginx_conf="/etc/nginx/sites-available/modela-gr.conf"
+  local nginx_conf="/etc/nginx/sites-available/${APP_DOMAIN}.conf"
 
   cat <<EOF | ${SUDO} tee "${nginx_conf}" >/dev/null
 server {
@@ -184,7 +198,7 @@ server {
 }
 EOF
 
-  ${SUDO} ln -sf "${nginx_conf}" /etc/nginx/sites-enabled/modela-gr.conf
+  ${SUDO} ln -sf "${nginx_conf}" "/etc/nginx/sites-enabled/${APP_DOMAIN}.conf"
   ${SUDO} nginx -t
   ${SUDO} systemctl enable --now nginx
   ${SUDO} systemctl reload nginx
