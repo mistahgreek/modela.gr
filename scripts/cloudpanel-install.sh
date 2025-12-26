@@ -76,12 +76,23 @@ configure_database() {
   log "Provisioning MySQL database"
   ${SUDO} systemctl enable --now mysql
   local mysql_flags="-u${MYSQL_ROOT_USER}"
+  local mysql_auth_file=""
   if [[ -n "${MYSQL_ROOT_PASS}" ]]; then
-    mysql_flags="${mysql_flags} -p${MYSQL_ROOT_PASS}"
+    mysql_auth_file="$(mktemp)"
+    cat <<EOF | ${SUDO} tee "${mysql_auth_file}" >/dev/null
+[client]
+user=${MYSQL_ROOT_USER}
+password=${MYSQL_ROOT_PASS}
+EOF
+    ${SUDO} chmod 600 "${mysql_auth_file}"
+    mysql_flags="--defaults-extra-file=${mysql_auth_file}"
   fi
   ${SUDO} mysql ${mysql_flags} -e "CREATE DATABASE IF NOT EXISTS \`${DB_NAME}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
   ${SUDO} mysql ${mysql_flags} -e "CREATE USER IF NOT EXISTS '${DB_USER}'@'localhost' IDENTIFIED BY '${DB_PASS}';"
   ${SUDO} mysql ${mysql_flags} -e "GRANT ALL PRIVILEGES ON \`${DB_NAME}\`.* TO '${DB_USER}'@'localhost'; FLUSH PRIVILEGES;"
+  if [[ -n "${mysql_auth_file}" ]]; then
+    ${SUDO} rm -f "${mysql_auth_file}"
+  fi
 }
 
 clone_repository() {
@@ -100,14 +111,22 @@ set_env_value() {
   local key="$1"
   local value="$2"
   local file="$3"
-  local escaped
-  escaped="$(printf '%s' "${value}" | sed -e 's/[\\/&|]/\\&/g')"
-
-  if grep -q "^${key}=" "${file}"; then
-    sed -i "s|^${key}=.*|${key}=${escaped}|" "${file}"
-  else
-    echo "${key}=${escaped}" >>"${file}"
-  fi
+  python - "$key" "$value" "$file" <<'PY'
+import sys, pathlib
+key, value, path = sys.argv[1:4]
+p = pathlib.Path(path)
+if not p.exists():
+    p.write_text(f"{key}={value}\n")
+    sys.exit(0)
+lines = p.read_text().splitlines()
+for idx, line in enumerate(lines):
+    if line.startswith(f"{key}="):
+        lines[idx] = f"{key}={value}"
+        break
+else:
+    lines.append(f"{key}={value}")
+p.write_text("\n".join(lines) + "\n")
+PY
 }
 
 configure_application() {
@@ -140,7 +159,7 @@ install_application() {
     npm run build
   fi
 
-  if ! grep -q "^APP_KEY=.\\+" .env; then
+  if ! grep -q "^APP_KEY=." .env; then
     php artisan key:generate --force
   fi
 
@@ -234,7 +253,12 @@ EOF
 
   log "Adding scheduler cron"
   local cron_line="* * * * * cd ${APP_DIR} && /usr/bin/php artisan schedule:run >> /dev/null 2>&1"
-  (crontab -l 2>/dev/null | grep -v "artisan schedule:run" || true; echo "${cron_line}") | crontab -
+  local cron_user="${CRON_USER:-www-data}"
+  if ${SUDO} id -u "${cron_user}" >/dev/null 2>&1; then
+    (crontab -u "${cron_user}" -l 2>/dev/null | grep -v "artisan schedule:run" || true; echo "${cron_line}") | ${SUDO} crontab -u "${cron_user}" -
+  else
+    (crontab -l 2>/dev/null | grep -v "artisan schedule:run" || true; echo "${cron_line}") | crontab -
+  fi
 }
 
 welcome() {
