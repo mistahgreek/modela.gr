@@ -43,7 +43,9 @@ ensure_packages() {
   . /etc/os-release
   OS_CODENAME="${VERSION_CODENAME:-$(lsb_release -cs)}"
   local sury_repo_exists=0
-  if grep -q "packages.sury.org/php" /etc/apt/sources.list /etc/apt/sources.list.d/* 2>/dev/null; then
+  if grep -q "packages.sury.org/php" /etc/apt/sources.list 2>/dev/null; then
+    sury_repo_exists=1
+  elif [[ -f /etc/apt/sources.list.d/sury-php.list ]]; then
     sury_repo_exists=1
   fi
 
@@ -52,11 +54,17 @@ ensure_packages() {
     if [[ ${sury_repo_exists} -eq 1 ]]; then
       local sury_list="/etc/apt/sources.list.d/sury-php.list"
       local sury_key="/etc/apt/trusted.gpg.d/sury-php.gpg"
-      if [[ -f "${sury_list}" || -f "${sury_key}" ]]; then
-        ${SUDO} rm -f "${sury_list}" "${sury_key}"
+      local removed_any=0
+      if [[ -f "${sury_list}" ]]; then
+        ${SUDO} rm -f "${sury_list}"
+        removed_any=1
+      fi
+      if [[ -f "${sury_key}" ]]; then
+        ${SUDO} rm -f "${sury_key}"
+        removed_any=1
+      fi
+      if [[ ${removed_any} -eq 1 ]]; then
         log "Ensured sury PHP apt entries are removed (${sury_list} ${sury_key})"
-      else
-        log "No sury PHP apt entries found to remove"
       fi
     fi
   elif [[ ${sury_repo_exists} -eq 0 ]]; then
