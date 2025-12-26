@@ -40,11 +40,45 @@ ensure_packages() {
   ${SUDO} apt-get update -y
   ${SUDO} apt-get install -y software-properties-common ca-certificates curl git lsb-release unzip python3
 
-  if ! grep -q "packages.sury.org/php" /etc/apt/sources.list /etc/apt/sources.list.d/* 2>/dev/null; then
+  . /etc/os-release
+  OS_CODENAME="${VERSION_CODENAME:-$(lsb_release -cs)}"
+  local sury_list_dir="/etc/apt/sources.list.d"
+  local sury_list="${sury_list_dir}/sury-php.list"
+  local sury_key="/etc/apt/trusted.gpg.d/sury-php.gpg"
+  local sury_repo_exists=0
+  local apt_sources=("/etc/apt/sources.list")
+  if [[ -d "${sury_list_dir}" ]]; then
+    while IFS= read -r -d '' file; do
+      apt_sources+=("${file}")
+    done < <(find "${sury_list_dir}" -maxdepth 1 -name "*.list" -print0 2>/dev/null)
+  fi
+  for src in "${apt_sources[@]}"; do
+    if [[ -f "${src}" ]] && grep -q "packages.sury.org/php" "${src}" 2>/dev/null; then
+      sury_repo_exists=1
+      break
+    fi
+  done
+
+  if [[ "${OS_CODENAME}" == "noble" ]]; then
+    log "Using distro PHP packages for ${OS_CODENAME}; skipping external repo"
+    if [[ ${sury_repo_exists} -eq 1 ]]; then
+      local removed_any=0
+      local removed_files=()
+      local sury_paths=("${sury_list}" "${sury_key}")
+      for path in "${sury_paths[@]}"; do
+        if [[ -f "${path}" ]]; then
+          ${SUDO} rm -f "${path}"
+          removed_any=1
+          removed_files+=("${path}")
+        fi
+      done
+      if [[ ${removed_any} -eq 1 ]]; then
+        log "Removed existing sury PHP repository configuration (${removed_files[*]})"
+      fi
+    fi
+  elif [[ ${sury_repo_exists} -eq 0 ]]; then
     log "Adding PHP repository"
     ${SUDO} curl -fsSL https://packages.sury.org/php/apt.gpg | ${SUDO} gpg --dearmor -o /etc/apt/trusted.gpg.d/sury-php.gpg
-    . /etc/os-release
-    OS_CODENAME="${VERSION_CODENAME:-$(lsb_release -cs)}"
     echo "deb https://packages.sury.org/php/ ${OS_CODENAME:-jammy} main" | ${SUDO} tee /etc/apt/sources.list.d/sury-php.list >/dev/null
   fi
 
@@ -70,8 +104,6 @@ ensure_packages() {
 
   if ! command -v node >/dev/null 2>&1 || ! node -v | grep -q "v20"; then
     log "Installing Node.js 20 (verified apt repo)"
-    . /etc/os-release
-    OS_CODENAME="${VERSION_CODENAME:-$(lsb_release -cs)}"
     curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key | ${SUDO} gpg --dearmor -o /usr/share/keyrings/nodesource.gpg
     echo "deb [signed-by=/usr/share/keyrings/nodesource.gpg] https://deb.nodesource.com/node_20.x ${OS_CODENAME} main" | ${SUDO} tee /etc/apt/sources.list.d/nodesource.list >/dev/null
     ${SUDO} apt-get update -y
