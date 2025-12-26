@@ -48,7 +48,9 @@ ensure_packages() {
   local sury_repo_exists=0
   local apt_sources=("/etc/apt/sources.list")
   if [[ -d "${sury_list_dir}" ]]; then
-    apt_sources+=("${sury_list_dir}"/*.list)
+    while IFS= read -r -d '' file; do
+      apt_sources+=("${file}")
+    done < <(find "${sury_list_dir}" -maxdepth 1 -name "*.list" -print0 2>/dev/null)
   fi
   for src in "${apt_sources[@]}"; do
     if [[ -f "${src}" ]] && grep -q "packages.sury.org/php" "${src}" 2>/dev/null; then
@@ -101,8 +103,6 @@ ensure_packages() {
 
   if ! command -v node >/dev/null 2>&1 || ! node -v | grep -q "v20"; then
     log "Installing Node.js 20 (verified apt repo)"
-    . /etc/os-release
-    OS_CODENAME="${VERSION_CODENAME:-$(lsb_release -cs)}"
     curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key | ${SUDO} gpg --dearmor -o /usr/share/keyrings/nodesource.gpg
     echo "deb [signed-by=/usr/share/keyrings/nodesource.gpg] https://deb.nodesource.com/node_20.x ${OS_CODENAME} main" | ${SUDO} tee /etc/apt/sources.list.d/nodesource.list >/dev/null
     ${SUDO} apt-get update -y
