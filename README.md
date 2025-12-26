@@ -208,9 +208,9 @@ This script will:
 - Keep the existing CloudPanel Nginx vhost (only reloads nginx).
 - Create queue worker service and cron scheduler.
 
-Default credentials after seeding:
-- Admin: `admin@modela.gr / password`
-- Demo: `demo@modela.gr / password`
+Default credentials after seeding (passwords are generated and printed at the end of the installer):
+- Admin: `admin@modela.gr / <generated>`
+- Demo: `demo@modela.gr / <generated>`
 
 ## Production Deployment (Ubuntu 22.04/24.04)
 

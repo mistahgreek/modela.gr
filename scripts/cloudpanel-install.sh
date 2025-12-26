@@ -15,11 +15,13 @@ fi
 REPO_URL="${REPO_URL:-https://github.com/mistahgreek/modela.gr.git}"
 DB_NAME="${DB_NAME:-modela}"
 DB_USER="${DB_USER:-modela}"
-DB_PASS="${DB_PASS:-$(openssl rand -hex 18)}"
+DB_PASS="${DB_PASS:-$(openssl rand -base64 32)}"
 PHP_VERSION="${PHP_VERSION:-8.3}"
 MYSQL_ROOT_USER="${MYSQL_ROOT_USER:-root}"
 MYSQL_ROOT_PASS="${MYSQL_ROOT_PASS:-}"
 PHP_BIN="${PHP_BIN:-$(command -v php || echo /usr/bin/php)}"
+ADMIN_PASSWORD="${ADMIN_PASSWORD:-$(openssl rand -base64 16)}"
+DEMO_PASSWORD="${DEMO_PASSWORD:-$(openssl rand -base64 16)}"
 
 if [[ "${EUID}" -ne 0 ]]; then
   SUDO="sudo"
@@ -83,7 +85,8 @@ configure_database() {
   local mysql_flags="-u${MYSQL_ROOT_USER}"
   local mysql_auth_file=""
   if [[ -n "${MYSQL_ROOT_PASS}" ]]; then
-    mysql_auth_file="$(mktemp /tmp/mysql-auth.XXXXXX)"
+    local auth_dir="${HOME:-/root}"
+    mysql_auth_file="$(mktemp "${auth_dir}/.mysql-auth.XXXXXX")"
     cat <<EOF | ${SUDO} tee "${mysql_auth_file}" >/dev/null
 [client]
 user=${MYSQL_ROOT_USER}
@@ -174,6 +177,7 @@ install_application() {
   php artisan config:cache
   php artisan route:cache
   php artisan view:cache
+  ADMIN_SEEDED_PASS="${ADMIN_PASSWORD}" DEMO_SEEDED_PASS="${DEMO_PASSWORD}" php -r '$app=require __DIR__."/bootstrap/app.php"; $app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap(); $hash=app("hash"); \App\Models\User::where("email","admin@modela.gr")->update(["password"=>$hash->make(getenv("ADMIN_SEEDED_PASS"))]); \App\Models\User::where("email","demo@modela.gr")->update(["password"=>$hash->make(getenv("DEMO_SEEDED_PASS"))]);'
 
   ${SUDO} chown -R www-data:www-data storage bootstrap/cache
 }
@@ -276,13 +280,15 @@ URL:        ${APP_URL}
 Directory:  ${APP_DIR}
 Admin user: admin@modela.gr / password
 Demo user:  demo@modela.gr / password
-Database:   ${DB_NAME} (user: ${DB_USER})
-Services:   nginx, mysql, redis, php${PHP_VERSION}-fpm, modela-queue
+  Database:   ${DB_NAME} (user: ${DB_USER})
+  Services:   nginx, mysql, redis, php${PHP_VERSION}-fpm, modela-queue
+  Admin pass: ${ADMIN_PASSWORD}
+  Demo pass:  ${DEMO_PASSWORD}
 
 Next steps:
  - Point your DNS for ${APP_DOMAIN} to this server.
  - Access the app and log in with the admin credentials above.
- - Adjust Stripe keys and mail settings in ${APP_DIR}/.env if needed.
+ - Adjust Stripe keys and mail settings in ${APP_DIR}/.env; rotate passwords if desired.
 
 Enjoy your fully automated CloudPanel deployment!
 ========================================================
