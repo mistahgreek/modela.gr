@@ -191,6 +191,27 @@ ALLOWED_MODEL_EXTENSIONS=stl,obj,3mf
 
 See `.env.example` for all available options.
 
+## One-command CloudPanel Install (existing domain)
+
+Run the unattended installer over SSH on a CloudPanel server where the domain already exists:
+
+```bash
+APP_DOMAIN=yourdomain.com bash <(curl -fsSL https://raw.githubusercontent.com/mistahgreek/modela.gr/canary/scripts/cloudpanel-install.sh)
+```
+
+Optional variables: `APP_DIR` (custom path), `APP_URL`, `DB_NAME`, `DB_USER`, `DB_PASS`.
+
+This script will:
+- Detect the CloudPanel docroot for the domain (falls back to `/home/cloudpanel/htdocs/<domain>`).
+- Install PHP 8.3, MySQL, Redis, Composer, Node 20.
+- Clone the repo, set `.env`, run migrations/seeders, build assets.
+- Keep the existing CloudPanel Nginx vhost (only reloads nginx).
+- Create queue worker service and cron scheduler.
+
+Default credentials after seeding:
+- Admin: `admin@modela.gr / password`
+- Demo: `demo@modela.gr / password`
+
 ## Production Deployment (Ubuntu 22.04/24.04)
 
 ### 1. Server Prerequisites
