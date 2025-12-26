@@ -19,6 +19,7 @@ DB_PASS="${DB_PASS:-$(openssl rand -hex 18)}"
 PHP_VERSION="${PHP_VERSION:-8.3}"
 MYSQL_ROOT_USER="${MYSQL_ROOT_USER:-root}"
 MYSQL_ROOT_PASS="${MYSQL_ROOT_PASS:-}"
+PHP_BIN="${PHP_BIN:-$(command -v php || echo /usr/bin/php)}"
 
 if [[ "${EUID}" -ne 0 ]]; then
   SUDO="sudo"
@@ -163,7 +164,7 @@ install_application() {
     npm run build
   fi
 
-  if ! grep -q "^APP_KEY=." .env; then
+  if ! grep -Eq "^APP_KEY=.+" .env; then
     php artisan key:generate --force
   fi
 
@@ -244,7 +245,7 @@ After=network.target
 Type=simple
 User=www-data
 WorkingDirectory=${APP_DIR}
-ExecStart=/usr/bin/php ${APP_DIR}/artisan queue:work redis --sleep=3 --tries=3 --max-time=3600
+ExecStart=${PHP_BIN} ${APP_DIR}/artisan queue:work redis --sleep=3 --tries=3 --max-time=3600
 Restart=always
 RestartSec=5
 
@@ -256,7 +257,7 @@ EOF
   ${SUDO} systemctl enable --now modela-queue.service
 
   log "Adding scheduler cron"
-  local cron_line="* * * * * cd ${APP_DIR} && /usr/bin/php artisan schedule:run >> ${APP_DIR}/storage/logs/schedule.log 2>&1"
+  local cron_line="* * * * * cd ${APP_DIR} && ${PHP_BIN} artisan schedule:run >> ${APP_DIR}/storage/logs/schedule.log 2>&1"
   local cron_user="${CRON_USER:-www-data}"
   if ${SUDO} id -u "${cron_user}" >/dev/null 2>&1; then
     (crontab -u "${cron_user}" -l 2>/dev/null | grep -v "artisan schedule:run" || true; echo "${cron_line}") | ${SUDO} crontab -u "${cron_user}" -
