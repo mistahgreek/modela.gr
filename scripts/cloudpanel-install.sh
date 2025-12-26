@@ -4,6 +4,7 @@ set -euo pipefail
 APP_DOMAIN="${APP_DOMAIN:-modela.local}"
 APP_URL="${APP_URL:-https://${APP_DOMAIN}}"
 APP_DIR_DEFAULT="/home/cloudpanel/htdocs/${APP_DOMAIN}"
+APP_OWNER="${APP_OWNER:-${SUDO_USER:-$USER}}"
 if [[ -d "${APP_DIR_DEFAULT}/htdocs" ]]; then
   APP_DIR="${APP_DIR:-${APP_DIR_DEFAULT}/htdocs}"
 elif [[ -d "${APP_DIR_DEFAULT}/public" ]]; then
@@ -56,8 +57,8 @@ ensure_packages() {
     EXPECTED_SIGNATURE="$(curl -fsSL https://composer.github.io/installer.sig)"
     php -r "copy('https://getcomposer.org/installer', 'composer-setup.php');"
     php -r "if (hash_file('SHA384', 'composer-setup.php') === '${EXPECTED_SIGNATURE}') { echo 'Installer verified'; } else { echo 'Installer corrupt'; unlink('composer-setup.php'); exit(1); }"
-    php composer-setup.php --install-dir=/usr/local/bin --filename=composer
-    rm composer-setup.php
+    ${SUDO} php composer-setup.php --install-dir=/usr/local/bin --filename=composer
+    ${SUDO} rm composer-setup.php
   fi
 
   if ! command -v node >/dev/null 2>&1 || ! node -v | grep -q "v20"; then
@@ -86,12 +87,12 @@ configure_database() {
 clone_repository() {
   log "Fetching source code into ${APP_DIR}"
   ${SUDO} mkdir -p "${APP_DIR}"
-  ${SUDO} chown -R "${USER}:${USER}" "${APP_DIR}"
+  ${SUDO} chown -R "${APP_OWNER}:${APP_OWNER}" "${APP_DIR}"
 
   if [[ ! -d "${APP_DIR}/.git" ]]; then
-    git clone "${REPO_URL}" "${APP_DIR}"
+    ${SUDO} -u "${APP_OWNER}" git clone "${REPO_URL}" "${APP_DIR}"
   else
-    (cd "${APP_DIR}" && git pull --ff-only)
+    (cd "${APP_DIR}" && ${SUDO} -u "${APP_OWNER}" git pull --ff-only)
   fi
 }
 
@@ -99,11 +100,13 @@ set_env_value() {
   local key="$1"
   local value="$2"
   local file="$3"
+  local escaped
+  escaped="$(printf '%s' "${value}" | sed -e 's/[\\/&|]/\\&/g')"
 
   if grep -q "^${key}=" "${file}"; then
-    sed -i "s|^${key}=.*|${key}=${value}|" "${file}"
+    sed -i "s|^${key}=.*|${key}=${escaped}|" "${file}"
   else
-    echo "${key}=${value}" >>"${file}"
+    echo "${key}=${escaped}" >>"${file}"
   fi
 }
 
@@ -137,7 +140,7 @@ install_application() {
     npm run build
   fi
 
-  if ! grep -q "^APP_KEY=base64:" .env; then
+  if ! grep -q "^APP_KEY=.\\+" .env; then
     php artisan key:generate --force
   fi
 
@@ -230,7 +233,8 @@ EOF
   ${SUDO} systemctl enable --now modela-queue.service
 
   log "Adding scheduler cron"
-  (crontab -l 2>/dev/null | grep -v "modela.gr artisan schedule:run" || true; echo "* * * * * cd ${APP_DIR} && /usr/bin/php artisan schedule:run >> /dev/null 2>&1") | crontab -
+  local cron_line="* * * * * cd ${APP_DIR} && /usr/bin/php artisan schedule:run >> /dev/null 2>&1"
+  (crontab -l 2>/dev/null | grep -v "artisan schedule:run" || true; echo "${cron_line}") | crontab -
 }
 
 welcome() {
