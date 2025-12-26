@@ -42,18 +42,24 @@ ensure_packages() {
 
   . /etc/os-release
   OS_CODENAME="${VERSION_CODENAME:-$(lsb_release -cs)}"
+  local sury_list_dir="/etc/apt/sources.list.d"
+  local sury_list="${sury_list_dir}/sury-php.list"
+  local sury_key="/etc/apt/trusted.gpg.d/sury-php.gpg"
   local sury_repo_exists=0
-  if grep -q "packages.sury.org/php" /etc/apt/sources.list 2>/dev/null; then
-    sury_repo_exists=1
-  elif [[ -f /etc/apt/sources.list.d/sury-php.list ]]; then
-    sury_repo_exists=1
+  local apt_sources=("/etc/apt/sources.list")
+  if [[ -d "${sury_list_dir}" ]]; then
+    apt_sources+=("${sury_list_dir}"/*.list)
   fi
+  for src in "${apt_sources[@]}"; do
+    if [[ -f "${src}" ]] && grep -q "packages.sury.org/php" "${src}" 2>/dev/null; then
+      sury_repo_exists=1
+      break
+    fi
+  done
 
   if [[ "${OS_CODENAME}" == "noble" ]]; then
     log "Using distro PHP packages for ${OS_CODENAME}; skipping external repo"
     if [[ ${sury_repo_exists} -eq 1 ]]; then
-      local sury_list="/etc/apt/sources.list.d/sury-php.list"
-      local sury_key="/etc/apt/trusted.gpg.d/sury-php.gpg"
       local removed_any=0
       if [[ -f "${sury_list}" ]]; then
         ${SUDO} rm -f "${sury_list}"
