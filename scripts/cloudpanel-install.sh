@@ -35,7 +35,7 @@ log() {
 ensure_packages() {
   log "Installing base packages"
   ${SUDO} apt-get update -y
-  ${SUDO} apt-get install -y software-properties-common ca-certificates curl git lsb-release unzip
+  ${SUDO} apt-get install -y software-properties-common ca-certificates curl git lsb-release unzip python3
 
   if ! grep -q "packages.sury.org/php" /etc/apt/sources.list /etc/apt/sources.list.d/* 2>/dev/null; then
     log "Adding PHP repository"
@@ -55,6 +55,10 @@ ensure_packages() {
   if ! command -v composer >/dev/null 2>&1; then
     log "Installing Composer"
     EXPECTED_SIGNATURE="$(curl -fsSL https://composer.github.io/installer.sig)"
+    if [[ -z "${EXPECTED_SIGNATURE}" ]]; then
+      log "Failed to fetch Composer installer signature"
+      exit 1
+    fi
     php -r "copy('https://getcomposer.org/installer', 'composer-setup.php');"
     php -r "if (hash_file('SHA384', 'composer-setup.php') === '${EXPECTED_SIGNATURE}') { echo 'Installer verified'; } else { echo 'Installer corrupt'; unlink('composer-setup.php'); exit(1); }"
     ${SUDO} php composer-setup.php --install-dir=/usr/local/bin --filename=composer
@@ -78,7 +82,7 @@ configure_database() {
   local mysql_flags="-u${MYSQL_ROOT_USER}"
   local mysql_auth_file=""
   if [[ -n "${MYSQL_ROOT_PASS}" ]]; then
-    mysql_auth_file="$(mktemp)"
+    mysql_auth_file="$(mktemp /tmp/mysql-auth.XXXXXX)"
     cat <<EOF | ${SUDO} tee "${mysql_auth_file}" >/dev/null
 [client]
 user=${MYSQL_ROOT_USER}
@@ -252,7 +256,7 @@ EOF
   ${SUDO} systemctl enable --now modela-queue.service
 
   log "Adding scheduler cron"
-  local cron_line="* * * * * cd ${APP_DIR} && /usr/bin/php artisan schedule:run >> /dev/null 2>&1"
+  local cron_line="* * * * * cd ${APP_DIR} && /usr/bin/php artisan schedule:run >> ${APP_DIR}/storage/logs/schedule.log 2>&1"
   local cron_user="${CRON_USER:-www-data}"
   if ${SUDO} id -u "${cron_user}" >/dev/null 2>&1; then
     (crontab -u "${cron_user}" -l 2>/dev/null | grep -v "artisan schedule:run" || true; echo "${cron_line}") | ${SUDO} crontab -u "${cron_user}" -
