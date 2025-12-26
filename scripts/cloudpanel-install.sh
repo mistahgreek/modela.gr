@@ -50,8 +50,14 @@ ensure_packages() {
   if [[ "${OS_CODENAME}" == "noble" ]]; then
     log "Using distro PHP packages for ${OS_CODENAME}; skipping external repo"
     if [[ ${sury_repo_exists} -eq 1 ]]; then
-      ${SUDO} rm -f /etc/apt/sources.list.d/*sury*php*.list /etc/apt/trusted.gpg.d/sury-php.gpg
-      log "Ensured sury PHP apt entries are removed"
+      local sury_list="/etc/apt/sources.list.d/sury-php.list"
+      local sury_key="/etc/apt/trusted.gpg.d/sury-php.gpg"
+      if [[ -f "${sury_list}" || -f "${sury_key}" ]]; then
+        ${SUDO} rm -f "${sury_list}" "${sury_key}"
+        log "Ensured sury PHP apt entries are removed (${sury_list} ${sury_key})"
+      else
+        log "No sury PHP apt entries found to remove"
+      fi
     fi
   elif [[ ${sury_repo_exists} -eq 0 ]]; then
     log "Adding PHP repository"
