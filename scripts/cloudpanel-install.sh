@@ -40,12 +40,15 @@ ensure_packages() {
   ${SUDO} apt-get update -y
   ${SUDO} apt-get install -y software-properties-common ca-certificates curl git lsb-release unzip python3
 
-  if ! grep -q "packages.sury.org/php" /etc/apt/sources.list /etc/apt/sources.list.d/* 2>/dev/null; then
+  . /etc/os-release
+  OS_CODENAME="${VERSION_CODENAME:-$(lsb_release -cs)}"
+  if [[ "${OS_CODENAME}" != "noble" ]] && ! grep -q "packages.sury.org/php" /etc/apt/sources.list /etc/apt/sources.list.d/* 2>/dev/null; then
     log "Adding PHP repository"
     ${SUDO} curl -fsSL https://packages.sury.org/php/apt.gpg | ${SUDO} gpg --dearmor -o /etc/apt/trusted.gpg.d/sury-php.gpg
-    . /etc/os-release
-    OS_CODENAME="${VERSION_CODENAME:-$(lsb_release -cs)}"
     echo "deb https://packages.sury.org/php/ ${OS_CODENAME:-jammy} main" | ${SUDO} tee /etc/apt/sources.list.d/sury-php.list >/dev/null
+  else
+    log "Using distro PHP packages for ${OS_CODENAME}; skipping external repo"
+    ${SUDO} rm -f /etc/apt/sources.list.d/sury-php.list /etc/apt/trusted.gpg.d/sury-php.gpg
   fi
 
   log "Installing PHP ${PHP_VERSION}, MySQL, Redis, and build tools"
