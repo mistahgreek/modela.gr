@@ -196,7 +196,7 @@ See `.env.example` for all available options.
 Run the unattended installer over SSH on a CloudPanel server where the domain already exists:
 
 ```bash
-APP_DOMAIN=yourdomain.com bash <(curl -fsSL https://raw.githubusercontent.com/mistahgreek/modela.gr/canary/scripts/cloudpanel-install.sh)
+APP_DOMAIN=yourdomain.com bash <(curl -fsSL https://raw.githubusercontent.com/mistahgreek/modela.gr/main/scripts/cloudpanel-install.sh)
 ```
 
 Optional variables: `APP_DIR` (custom path), `APP_URL`, `DB_NAME`, `DB_USER`, `DB_PASS`.
