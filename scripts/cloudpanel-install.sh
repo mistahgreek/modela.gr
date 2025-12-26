@@ -49,6 +49,7 @@ ensure_packages() {
   else
     log "Using distro PHP packages for ${OS_CODENAME}; skipping external repo"
     ${SUDO} rm -f /etc/apt/sources.list.d/sury-php.list /etc/apt/trusted.gpg.d/sury-php.gpg
+    log "Ensured sury PHP apt entries are removed"
   fi
 
   log "Installing PHP ${PHP_VERSION}, MySQL, Redis, and build tools"
