@@ -177,7 +177,18 @@ install_application() {
   php artisan config:cache
   php artisan route:cache
   php artisan view:cache
-  ADMIN_SEEDED_PASS="${ADMIN_PASSWORD}" DEMO_SEEDED_PASS="${DEMO_PASSWORD}" php -r '$app=require __DIR__."/bootstrap/app.php"; $app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap(); $hash=app("hash"); \App\Models\User::where("email","admin@modela.gr")->update(["password"=>$hash->make(getenv("ADMIN_SEEDED_PASS"))]); \App\Models\User::where("email","demo@modela.gr")->update(["password"=>$hash->make(getenv("DEMO_SEEDED_PASS"))]);'
+  local reset_script
+  reset_script="$(mktemp "${HOME:-/root}/.modela-reset.XXXXXX.php")"
+  cat >"${reset_script}" <<'PHP'
+<?php
+$app = require __DIR__.'/bootstrap/app.php';
+$app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap();
+$hash = app('hash');
+\App\Models\User::where('email', 'admin@modela.gr')->update(['password' => $hash->make(getenv('ADMIN_SEEDED_PASS'))]);
+\App\Models\User::where('email', 'demo@modela.gr')->update(['password' => $hash->make(getenv('DEMO_SEEDED_PASS'))]);
+PHP
+  ADMIN_SEEDED_PASS="${ADMIN_PASSWORD}" DEMO_SEEDED_PASS="${DEMO_PASSWORD}" php "${reset_script}"
+  ${SUDO} rm -f "${reset_script}"
 
   ${SUDO} chown -R www-data:www-data storage bootstrap/cache
 }
@@ -261,7 +272,9 @@ EOF
   ${SUDO} systemctl enable --now modela-queue.service
 
   log "Adding scheduler cron"
-  local cron_line="* * * * * cd ${APP_DIR} && ${PHP_BIN} artisan schedule:run >> ${APP_DIR}/storage/logs/schedule.log 2>&1"
+  ${SUDO} mkdir -p /var/log/modela
+  ${SUDO} chown www-data:www-data /var/log/modela
+  local cron_line="* * * * * cd ${APP_DIR} && ${PHP_BIN} artisan schedule:run >> /var/log/modela/schedule.log 2>&1"
   local cron_user="${CRON_USER:-www-data}"
   if ${SUDO} id -u "${cron_user}" >/dev/null 2>&1; then
     (crontab -u "${cron_user}" -l 2>/dev/null | grep -v "artisan schedule:run" || true; echo "${cron_line}") | ${SUDO} crontab -u "${cron_user}" -

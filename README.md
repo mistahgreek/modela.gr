@@ -212,6 +212,14 @@ Default credentials after seeding (passwords are generated and printed at the en
 - Admin: `admin@modela.gr / <generated>`
 - Demo: `demo@modela.gr / <generated>`
 
+### CloudPanel notes
+- **Vhost/SSL/Varnish**: The installer leaves CloudPanel-managed vhosts intact and only reloads nginx. Configure SSL/TLS and Varnish from the CloudPanel UI as usual.
+- **Databases**: The script creates its own database/user if missing; you can pre-create them in CloudPanel and pass `DB_NAME/DB_USER/DB_PASS`.
+- **Security**: Random admin/demo passwords are generated and shown in the SSH output—rotate them in the CloudPanel UI or `.env` if desired.
+- **Cron Jobs**: A per-minute scheduler is installed for the `www-data` user. Manage/inspect cron from CloudPanel Cron Jobs if preferred.
+- **Logs**: Scheduler logs go to `/var/log/modela/schedule.log`; application logs remain in `storage/logs`.
+- **SSH/FTP/File Manager**: The installer writes to the detected docroot for the existing CloudPanel domain; you can manage files via CloudPanel File Manager/SSH/FTP afterward.
+
 ## Production Deployment (Ubuntu 22.04/24.04)
 
 ### 1. Server Prerequisites
